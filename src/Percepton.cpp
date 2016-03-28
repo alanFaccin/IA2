@@ -102,10 +102,10 @@ double CalculoCamada(int camada, int iteracao) {
 
 void update_Pesos(int qtd_entradas) {
 
-	for (int a = 0; a < qtd_entradas; a++) {
-		DeltaPesos[a] = TaxaAprendizado * erro * Entradas[a];
-		Pesos[a] = Pesos[a] + DeltaPesos[a];
-	}
+//	for (int a = 0; a < qtd_entradas; a++) {
+	//	DeltaPesos[a] = TaxaAprendizado * erro * Entradas[a];
+	//	Pesos[a] = Pesos[a] + DeltaPesos[a];
+	//}
 }
 /*função reponsável por realizar o cálculo do erro quadrático, levando em conta a matriz de valor desejado e a saida da camada 2*/
 double calc_erro_quadratico(int iteracao) {
@@ -203,7 +203,7 @@ void treinamento() {
 		for (k = 0; k < padroes; k++) {
 			CalculoCamada(1, k);
 			CalculoCamada(2, k);
-			//calc_erro_medio_quadratico(calc_erro_quadratico(k));
+			calc_erro_medio_quadratico(calc_erro_quadratico(k),erro_medio_quadratico);
 
 		}
 
