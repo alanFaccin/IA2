@@ -13,9 +13,8 @@
 #include <stdlib.h>
 #include  <time.h>
 
-int padroes = 1, funcao = 0, contador = 0, epocas = 0, fim = 0;
-double net = 0, y = 0, erro = 0, ValorDesejado = 0, TaxaAprendizado = 0.005,
-		erro_medio_quadratico = 0;
+int padroes = 1, funcao = 1, contador = 0, epocas = 0, fim = 0;
+double net = 0, y = 0, TaxaAprendizado = 0.005, erro_medio_quadratico = 0;
 
 // Padrıes de entrada da rede (sensores).
 float padrao[11][2] = { 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0 };
@@ -52,7 +51,7 @@ double funcaoDeAtivacao(double net, int funcao, double a) {
 		valor = (1.0 / (1.0 + exp(-a * net)));
 
 		return (valor);
-	} else {
+	} else { // funcao hiperbólica
 		/*
 		 exp(a.net) - exp(-a.net)
 		 y(n) = ------------------------
@@ -66,6 +65,35 @@ double funcaoDeAtivacao(double net, int funcao, double a) {
 	}
 
 	return (valor);
+}
+
+float derivada(float net, int funcao, float a) {
+
+	if (!funcao) {
+
+		/*
+		 1                       1
+		 y(n) = --------------- * ( 1 - --------------- )
+		 1 - exp(-a.net)         1 - exp(-a.net)
+		 */
+
+		return ((1.0 / (1.0 + exp(-a * net)))
+				* (1.0 - (1.0 / (1.0 + exp(-a * net)))));
+
+	} else {
+
+		/*
+		 exp(a.net) - exp(-a.net)
+		 y(n) = 1 - ( ------------------------ )≤
+		 exp(a.net) + exp(-a.net)
+
+		 */
+
+		return (1.0
+				- pow(
+						(exp(a * net) - exp(-a * net))
+								/ (exp(a * net) + exp(-a * net)), 2));
+	}
 }
 
 double CalculoCamada(int camada, int iteracao) {
@@ -100,12 +128,34 @@ double CalculoCamada(int camada, int iteracao) {
 	return somatorio;
 }
 
-void update_Pesos(int qtd_entradas) {
+void update_Pesos(int camada, int iteracao) {
+	int n;
+	if (camada == 1) {
 
-//	for (int a = 0; a < qtd_entradas; a++) {
-	//	DeltaPesos[a] = TaxaAprendizado * erro * Entradas[a];
-	//	Pesos[a] = Pesos[a] + DeltaPesos[a];
-	//}
+		for (int i = 0; i < input; i++) {
+			n = 0;
+			for (int j = 0; j < camada_1; j++) {
+				DeltaPesosCamada_1[n + i] = TaxaAprendizado
+						* padrao[iteracao][i] * erro_camada1[j];
+				PesosCamada_1[n + i] = PesosCamada_1[n + i]
+						+ DeltaPesosCamada_1[n + i];
+				n += input;
+			}
+		}
+
+	} else if (camada == 2) {
+
+		for (int i = 0; i < camada_1; i++) {
+			n = 0;
+			for (int j = 0; j < camada_2; j++) {
+				DeltaPesosCamada_2[n + i] = TaxaAprendizado * saida_camada1[i]* erro_camada2[j];
+				PesosCamada_2[n + i] = PesosCamada_2[n + i]
+						+ DeltaPesosCamada_2[n + i];
+				;
+				n += camada_1;
+			}
+		}
+	}
 }
 /*função reponsável por realizar o cálculo do erro quadrático, levando em conta a matriz de valor desejado e a saida da camada 2*/
 double calc_erro_quadratico(int iteracao) {
@@ -118,7 +168,6 @@ double calc_erro_quadratico(int iteracao) {
 	return err;
 }
 double calc_erro_medio_quadratico(double erro_qud, double erro_m_quad) {
-	double err;
 	erro_m_quad += (0.5 * erro_qud);
 	return erro_m_quad;
 }
@@ -192,22 +241,89 @@ void grava_Pesos_inicials_arquivo(int camada) {
 	fclose(fp);
 }
 
+void calcula_erro(int camada, int iteracao) {
+
+	if (camada == 1) {
+		double somatorio = 0;
+		int n;
+		for (int i = 0; i < camada_1; i++) {
+			n = 0;
+			somatorio = 0;
+			for (int j = 0; j < camada_2; j++) {
+				somatorio += (erro_camada2[j] * DeltaPesosCamada_2[n + i]);
+				n += camada_1;
+			}
+			erro_camada1[i] = somatorio
+					* derivada(entrada_camada1[i], funcao, 1.0);
+		}
+	} else if (camada == 2) {
+		for (int i = 0; i < camada_2; i++) {
+			erro_camada2[i] = (d[iteracao][i] -saida_camada2[i])* derivada(entrada_camada2[i],funcao,1.0);
+			//erro_camada2[i] = d[iteracao][i]- *derivada(entrada_camada2[i], funcao, 1.0);
+		}
+	}
+}
+void grava_pesos_apos_treinamento() {
+
+	//****************** Gravacao dos Pesos Apos treinamento ******************
+	FILE *fp;
+	fp = fopen("pesos_treino.txt", "wt");
+	// camada 1
+	fprintf(fp, "Pesos Camada 1\n");
+	for (int j = 0; j < (input * camada_1); j++) {
+		fprintf(fp, "%f\n", PesosCamada_1[j]);
+	}
+	// camada 2
+	fprintf(fp, "Pesos Camada 2\n\n");
+	for (int j = 0; j < (camada_1 * camada_2); j++) {
+		fprintf(fp, "%f\n", PesosCamada_2[j]);
+	}
+	fclose(fp);
+}
 void treinamento() {
 	FILE *fp;
 	fp = fopen("treinamento.txt", "wt");
-
+	epocas 		=	1000;
+	padroes 	=	4;
+	contador	=	0;
 	do {
 		contador++;
 		//Laço para a propagação dos padroes pela rede.
-		int k;
-		for (k = 0; k < padroes; k++) {
-			CalculoCamada(1, k);
-			CalculoCamada(2, k);
-			calc_erro_medio_quadratico(calc_erro_quadratico(k),erro_medio_quadratico);
+
+		for (int k = 0; k < padroes; k++) {
+			//**************************** Forward **************************
+			CalculoCamada(1, k);	//obter as entardas e saidas da camada 1
+			CalculoCamada(2, k); // obter as netradas e saidas da camada 2
+
+			erro_medio_quadratico = calc_erro_medio_quadratico(calc_erro_quadratico(k),
+					erro_medio_quadratico);
+
+			//**************************** BackWard **************************
+
+			//Calculo do erro para camada 2.
+			calcula_erro(2, k);
+			//Atualizacao dos pesos para camada 2.
+			update_Pesos(2, k);
+			//Calculo do erro para camada 1.
+			calcula_erro(1, k);
+			//Atualizacao dos pesos para camada 1.
+			update_Pesos(1, k);
 
 		}
+		// Calculo do erro médio quadratico da época de treinamento.
+		erro_medio_quadratico = (1.0 / padroes) * erro_medio_quadratico;
+
+		printf("%d\t%f\n", (int) contador, erro_medio_quadratico);
+
+		fprintf(fp, "%d\t%f\n", (int) contador, erro_medio_quadratico);
+
+		erro_medio_quadratico = 0;
 
 	} while (!fim && contador != epocas);
+
+	// Fecha o ponteiro do arquivo de erros de treinamento.
+	fclose(fp);
+	grava_pesos_apos_treinamento();
 }
 
 int main() {
@@ -226,4 +342,6 @@ int main() {
 
 	grava_Pesos_inicials_arquivo(1);
 	grava_Pesos_inicials_arquivo(2);
+
+	treinamento();
 }
